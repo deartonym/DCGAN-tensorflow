@@ -203,6 +203,7 @@ class DCGAN(object):
         batch_idxs = min(len(data), config.train_size) // config.batch_size
 
       for idx in xrange(0, batch_idxs):
+        batch_start_time = time.time()
         if config.dataset == 'mnist':
           batch_images = data_X[idx*config.batch_size:(idx+1)*config.batch_size]
           batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
@@ -280,9 +281,14 @@ class DCGAN(object):
           errG = self.g_loss.eval({self.z: batch_z})
 
         counter += 1
-        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-          % (epoch, idx, batch_idxs,
-            time.time() - start_time, errD_fake+errD_real, errG))
+        _duration = time.time() - batch_start_time
+        examples_per_sec = self.batch_size / _duration
+        hr_per_epoch = float(_duration) * batch_idxs / 3600
+        print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f (%.2f examples/sec, %.1f hour/epoch)" \
+              % (epoch, idx, batch_idxs,
+                 time.time() - start_time, errD_fake+errD_real, errG,
+                 examples_per_sec, hr_per_epoch)
+              )
 
         if np.mod(counter, 100) == 1:
           if config.dataset == 'mnist':
