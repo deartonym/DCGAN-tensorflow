@@ -2,7 +2,7 @@ import os
 import scipy.misc
 import numpy as np
 
-from model import DCGAN
+from model_hdf5 import DCGAN
 from utils import pp, visualize, to_json, show_all_variables
 
 import tensorflow as tf
@@ -25,6 +25,7 @@ flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image s
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_string("hdf5_path", None, "The path of the path of the hdf5 file for training")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -75,7 +76,8 @@ def main(_):
           input_fname_pattern=FLAGS.input_fname_pattern,
           is_crop=FLAGS.is_crop,
           checkpoint_dir=FLAGS.checkpoint_dir,
-          sample_dir=FLAGS.sample_dir)
+          sample_dir=FLAGS.sample_dir,
+          hdf5_path=FLAGS.hdf5_path)
 
     show_all_variables()
     if FLAGS.is_train:

@@ -1,11 +1,13 @@
 from __future__ import division
-import os
+import os, sys
 import time
 import math
 from glob import glob
 import tensorflow as tf
 import numpy as np
 from six.moves import xrange
+import h5py
+from PIL import Image
 
 from ops import *
 from utils import *
@@ -18,7 +20,7 @@ class DCGAN(object):
          batch_size=64, sample_num = 64, output_height=64, output_width=64,
          y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
+         input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None, hdf5_path=None):
     """
 
     Args:
@@ -38,6 +40,7 @@ class DCGAN(object):
 
     self.batch_size = batch_size
     self.sample_num = sample_num
+    self.hdf5_path = hdf5_path
 
     self.input_height = input_height
     self.input_width = input_width
@@ -146,6 +149,9 @@ class DCGAN(object):
     """Train DCGAN"""
     if config.dataset == 'mnist':
       data_X, data_y = self.load_mnist()
+    elif self.hdf5_path is not None:
+      h5_file = h5py.File(self.hdf5_path, 'r')
+      data_hdf5 = h5_file['imgs']
     else:
       data = glob(os.path.join("./data", config.dataset, self.input_fname_pattern))
     #np.random.shuffle(data)
@@ -170,6 +176,8 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       sample_inputs = data_X[0:self.sample_num]
       sample_labels = data_y[0:self.sample_num]
+    elif self.hdf5_path is not None:
+      sample_inputs = self.get_batch_imgs(data_hdf5, self.sample_num, 0, (self.input_height, self.input_width, 3))
     else:
       sample_files = data[0:self.sample_num]
       sample = [
@@ -197,6 +205,8 @@ class DCGAN(object):
     for epoch in xrange(config.epoch):
       if config.dataset == 'mnist':
         batch_idxs = min(len(data_X), config.train_size) // config.batch_size
+      elif self.hdf5_path is not None:
+        batch_idxs = min(data_hdf5.shape[0]*data_hdf5.shape[1], config.train_size) // config.batch_size
       else:      
         data = glob(os.path.join(
           "./data", config.dataset, self.input_fname_pattern))
@@ -207,6 +217,9 @@ class DCGAN(object):
         if config.dataset == 'mnist':
           batch_images = data_X[idx*config.batch_size:(idx+1)*config.batch_size]
           batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
+        elif self.hdf5_path is not None:
+          batch_images = self.get_batch_imgs(data_hdf5, config.batch_size, idx,
+                                             (self.input_height, self.input_width, 3)).astype(np.float32)
         else:
           batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
           batch = [
@@ -532,3 +545,51 @@ class DCGAN(object):
     else:
       print(" [*] Failed to find a checkpoint")
       return False, 0
+
+  def get_batch_imgs(self, imgs, batch_size, batch_idx, img_shape=None):
+    img_data_shape = imgs.shape
+    if len(img_data_shape) == 5:
+      fst_col_idx = int(batch_idx * batch_size / img_data_shape[1])
+
+      fst_row_idx = int(batch_idx * batch_size % img_data_shape[1])
+      end_row_idx = int((batch_idx + 1) * batch_size % img_data_shape[1])
+      if (batch_idx + 1) * batch_size > img_data_shape[0] * img_data_shape[1]:
+        end_row_idx = 0
+        end_col_idx = img_data_shape[0]
+      elif end_row_idx == 0:
+        end_col_idx = int((batch_idx + 1) * batch_size / img_data_shape[1]) - 1
+      else:
+        end_col_idx = int((batch_idx + 1) * batch_size / img_data_shape[1])
+
+      if fst_col_idx == end_col_idx:
+        batch_imgs = imgs[fst_col_idx, fst_row_idx:end_row_idx + batch_size + 1, :, :, :].astype(float)
+      else:
+        batch_1 = imgs[fst_col_idx, fst_row_idx:, :, :, :]
+        for i in range(fst_col_idx + 1, end_col_idx):
+          batch_middle = imgs[i, :, :, :, :]
+          batch_1 = np.concatenate((batch_1, batch_middle), axis=0)
+        if end_row_idx == 0:
+          batch_3 = imgs[end_col_idx, :, :, :, :]
+        else:
+          batch_3 = imgs[end_col_idx, :end_row_idx, :, :, :]
+        batch_imgs = np.concatenate((batch_1, batch_3), axis=0)
+
+      batch_imgs = batch_imgs.reshape((-1, img_data_shape[2], img_data_shape[3], img_data_shape[4]))
+    elif len(img_data_shape) == 4:
+      img_num = img_data_shape[0]
+      if batch_size * (batch_idx + 1) > img_num:
+        batch_imgs = imgs[batch_size * batch_idx:, :, :, :]
+      else:
+        batch_imgs = imgs[batch_size * batch_idx:batch_size * (batch_idx + 1), :, :, :]
+    else:
+      print("The shape of images input is not 4 or 5 dim, check plz.")
+      sys.exit(1)
+
+    if img_shape is not None:
+      tmp_batch_imgs = np.zeros((batch_size, img_shape[0], img_shape[1], img_shape[2]), dtype=np.uint8)
+      for ii in range(batch_size):
+        tmp_img = Image.fromarray(batch_imgs[ii, :, :, :])
+        tmp_batch_imgs[ii, :, :, :] = tmp_img.resize((img_shape[0], img_shape[1]), resample=Image.BICUBIC)
+      return tmp_batch_imgs
+
+    return batch_imgs
