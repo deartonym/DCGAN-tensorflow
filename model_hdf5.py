@@ -177,7 +177,7 @@ class DCGAN(object):
       sample_inputs = data_X[0:self.sample_num]
       sample_labels = data_y[0:self.sample_num]
     elif self.hdf5_path is not None:
-      sample_inputs = self.get_batch_imgs(data_hdf5, self.sample_num, 0, (self.input_height, self.input_width, 3))
+      sample_inputs = self.get_batch_imgs(data_hdf5, self.sample_num, 0, (self.output_height, self.output_height, 3))
     else:
       sample_files = data[0:self.sample_num]
       sample = [
@@ -219,7 +219,7 @@ class DCGAN(object):
           batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
         elif self.hdf5_path is not None:
           batch_images = self.get_batch_imgs(data_hdf5, config.batch_size, idx,
-                                             (self.input_height, self.input_width, 3)).astype(np.float32)
+                                             (self.output_height, self.output_height, 3)).astype(np.float32)
         else:
           batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
           batch = [
@@ -590,6 +590,6 @@ class DCGAN(object):
       for ii in range(batch_size):
         tmp_img = Image.fromarray(batch_imgs[ii, :, :, :])
         tmp_batch_imgs[ii, :, :, :] = tmp_img.resize((img_shape[0], img_shape[1]), resample=Image.BICUBIC)
-      return tmp_batch_imgs
+      return tmp_batch_imgs.astype(float)/255
 
-    return batch_imgs
+    return batch_imgs.astype(float)/255
